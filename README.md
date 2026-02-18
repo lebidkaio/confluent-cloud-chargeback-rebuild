@@ -1,3 +1,4 @@
+
 # Confluent Billing Portal
 
 A chargeback/showback platform for Confluent Cloud that transforms daily billing data into hourly cost datasets, correlates with entities and metadata, and exposes data via Prometheus/Grafana and REST API.
@@ -195,6 +196,8 @@ For detailed panel descriptions, see:
 4. Format code: `make format`
 5. Submit a pull request
 
+   <img width="1896" height="904" alt="image" src="https://github.com/user-attachments/assets/287d1506-27d4-48d4-9723-f4070bd0092c" />
+
 ## License
 
 MIT License - see LICENSE file for details
@@ -204,3 +207,4 @@ MIT License - see LICENSE file for details
 For issues and questions:
 - Open an issue on GitHub
 - Check documentation in `/docs`
+
