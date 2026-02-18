@@ -1,0 +1,84 @@
+groups:
+  - name: portal_alerts
+    interval: 30s
+    rules:
+      # High API error rate
+      - alert: HighAPIErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) 
+          / 
+          sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # Database connection failures
+      - alert: DatabaseConnectionFailure
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "Cannot connect to PostgreSQL database for 2 minutes"
+
+      # Scheduler job failures
+      - alert: SchedulerJobFailure
+        expr: increase(scheduler_job_errors_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple scheduler job failures"
+          description: "{{ $value }} job failures in the last 10 minutes"
+
+      # Low cache hit rate
+      - alert: LowCacheHitRate
+        expr: |
+          (cache_hits_total / (cache_hits_total + cache_misses_total)) < 0.5
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Cache hit rate below 50%"
+          description: "Current cache hit rate: {{ $value | humanizePercentage }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes / 1024 / 1024 / 1024) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}GB (threshold: 1.5GB)"
+
+      # Data ingestion delay
+      - alert: DataIngestionDelay
+        expr: |
+          (time() - ingestion_last_success_timestamp_seconds) > 7200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data ingestion is delayed"
+          description: "No successful ingestion for {{ $value | humanizeDuration }}"
+
+      # High cost anomaly
+      - alert: CostAnomaly
+        expr: |
+          abs(
+            sum(rate(ccloud_cost_usd_hourly[1h]))
+            -
+            avg_over_time(sum(rate(ccloud_cost_usd_hourly[1h]))[7d:1h])
+          ) / avg_over_time(sum(rate(ccloud_cost_usd_hourly[1h]))[7d:1h]) > 0.5
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "Cost anomaly detected"
+          description: "Current costs deviate {{ $value | humanizePercentage }} from 7-day average"

@@ -1,0 +1,15 @@
+# Prometheus configuration for scraping the billing portal metrics
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'billing-portal'
+
+scrape_configs:
+  - job_name: 'billing-portal'
+    static_configs:
+      - targets: ['app:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
