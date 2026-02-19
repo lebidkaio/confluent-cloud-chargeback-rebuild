@@ -221,6 +221,10 @@ def run_billing_collection(db: Session, target_date: date = None) -> Dict[str, A
         known_clusters = set(r.id for r in db.query(DimensionCluster.id).all())
         known_envs = set(env_org_map.keys())
         
+        # Validate and Enrich
+        from src.enricher.correlator import EntityCorrelator
+        correlator = EntityCorrelator(db)
+        
         valid_records = []
         for record in hourly_costs:
             # Resolve org_id
@@ -253,9 +257,16 @@ def run_billing_collection(db: Session, target_date: date = None) -> Dict[str, A
                     "org_id": record["org_id"],
                     "env_id": env_id or "unknown",
                     "name": cluster_id,
+                    "cluster_type": "unknown",
+                    "cloud_provider": "unknown",
+                    "region": "unknown",
                 })
                 known_clusters.add(cluster_id)
             
+            # ENRICHMENT STEP: Correlate with entities and tags
+            # This populates principal_id, business_unit, etc. from tags
+            record = correlator.enrich_with_metadata(record)
+
             valid_records.append(record)
         
         logger.info(f"Valid records: {len(valid_records)}/{len(hourly_costs)}")

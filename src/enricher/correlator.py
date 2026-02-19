@@ -270,6 +270,10 @@ class EntityCorrelator:
         # Enrich with product (priority: existing > tags > default)
         if not enriched.get("product") or enriched.get("product") == "unknown":
             enriched["product"] = tags.get("product", "unknown")
+            
+        # Enrich with principal (from tags)
+        if not enriched.get("principal_id"):
+            enriched["principal_id"] = self._infer_principal(tags)
         
         # Enrich with team/environment tags
         enriched["team"] = tags.get("team", "unknown")
@@ -320,5 +324,44 @@ class EntityCorrelator:
         - production -> cc-production
         - Default: cc-unknown
         """
-        bu = self._infer_business_unit(cluster_info)
         return f"cc-{bu}"
+
+    def _infer_principal(self, tags: Dict[str, Any]) -> Optional[str]:
+        """
+        Infer principal_id from tags
+        
+        Tags checked (in order):
+        - owner
+        - principal
+        - created_by
+        - user
+        - service_account
+        
+        Supported value formats:
+        - sa-xxxxx (Service Account ID)
+        - u-xxxxx (User ID)
+        - email@address.com (Lookup by email)
+        """
+        target_tags = ["owner", "principal", "created_by", "user", "service_account"]
+        
+        for tag_key in target_tags:
+            value = tags.get(tag_key)
+            if not value:
+                continue
+                
+            value = str(value).strip()
+            
+            # Direct ID match
+            if value.startswith("sa-") or value.startswith("u-"):
+                # Retrieve from DB to ensure validity/existence
+                principal = self.db.query(DimensionPrincipal).filter_by(id=value).first()
+                if principal:
+                    return principal.id
+            
+            # Email lookup
+            if "@" in value:
+                principal = self.db.query(DimensionPrincipal).filter_by(email=value).first()
+                if principal:
+                    return principal.id
+        
+        return None
