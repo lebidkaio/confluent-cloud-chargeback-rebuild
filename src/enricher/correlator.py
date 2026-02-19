@@ -278,10 +278,12 @@ class EntityCorrelator:
         
         # Enrich with team/environment tags
         enriched["team"] = tags.get("team", "unknown")
-        enriched["environment"] = tags.get("environment", "unknown")
-        
-        # Store correlation graph for debugging
-        enriched["_correlation_graph"] = graph
+        # Note: 'environment' tag stored in tags JSON, NOT as top-level field
+        # (HourlyCostFact uses env_id for the environment dimension)
+        if tags.get("environment") and tags["environment"] != "unknown":
+            existing_tags = enriched.get("tags") or {}
+            existing_tags["environment"] = tags["environment"]
+            enriched["tags"] = existing_tags
         
         logger.debug(
             f"Enriched cost record",

@@ -1,4 +1,3 @@
-
 # Confluent Billing Portal
 
 A chargeback/showback platform for Confluent Cloud that transforms daily billing data into hourly cost datasets, correlates with entities and metadata, and exposes data via Prometheus/Grafana and REST API.
@@ -125,6 +124,82 @@ graph TD
     style J fill:#F47B20
 ```
 
+## Stream Governance Integration (Tag-Based Cost Attribution)
+
+The portal integrates with the **Confluent Stream Governance Catalog API** to fetch native entity tags for granular cost attribution at the topic and schema level.
+
+### How It Works
+
+```mermaid
+flowchart LR
+    A["Stream Governance\nCatalog API"] -->|tags| B["dimensions_clusters\n.meta_data"]
+    C["Billing API"] -->|costs| D[Normalizer]
+    D --> E[Collector Job]
+    B --> F[EntityCorrelator]
+    E --> F
+    F -->|enriched| G[hourly_cost_facts]
+    G --> H["Grafana\nCost by Principal"]
+```
+
+### Step-by-Step Configuration
+
+**1. Verify Stream Governance Package**
+
+Your environment must have Stream Governance **ESSENTIALS** or **ADVANCED**. Check in: Confluent Cloud Console > Environments > your-env > Stream Governance.
+
+**2. Create Schema Registry API Key**
+
+```
+Confluent Cloud Console
+> Environments > your-env
+> Schema Registry > API Credentials > Create Key
+```
+
+Save the Key and Secret.
+
+**3. Add Credentials to `.env`**
+
+```env
+# Stream Governance / Schema Registry
+SCHEMA_REGISTRY_URL=https://psrc-xxxxx.us-east-2.aws.confluent.cloud
+SCHEMA_REGISTRY_API_KEY=YOUR_SR_KEY
+SCHEMA_REGISTRY_API_SECRET=YOUR_SR_SECRET
+```
+
+**4. Rebuild and Restart**
+
+```bash
+docker compose -f docker/docker-compose.yml build app
+docker compose -f docker/docker-compose.yml up -d app
+```
+
+**5. Trigger Tag Collection**
+
+```bash
+# Collect tags only
+curl -X POST http://localhost:8000/api/v1/collect/catalog-tags
+
+# Or run the full pipeline (objects + tags + billing)
+curl -X POST http://localhost:8000/api/v1/collect/full
+```
+
+### Collection API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/collect/catalog-tags` | Fetch tags from Catalog API |
+| `POST` | `/api/v1/collect/billing` | Collect billing data |
+| `POST` | `/api/v1/collect/core-objects` | Fetch orgs, envs, clusters, SAs |
+| `POST` | `/api/v1/collect/full` | Run complete pipeline |
+
+### Alternative: Name-Based Attribution
+
+If Stream Governance is not available, the system also supports inferring owners from:
+
+- **Environment Name**: `env-analytics-owner-bob`
+- **Cluster Name**: `kafka-prod-owner-teamA`
+- **Service Account Description**: `Owner: bob@company.com`
+
 ## Testing
 
 ```bash
@@ -197,8 +272,6 @@ For detailed panel descriptions, see:
 4. Format code: `make format`
 5. Submit a pull request
 
-   <img width="1896" height="904" alt="image" src="https://github.com/user-attachments/assets/287d1506-27d4-48d4-9723-f4070bd0092c" />
-
 ## License
 
 MIT License - see LICENSE file for details
@@ -208,4 +281,3 @@ MIT License - see LICENSE file for details
 For issues and questions:
 - Open an issue on GitHub
 - Check documentation in `/docs`
-

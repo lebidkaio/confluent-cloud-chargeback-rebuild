@@ -15,8 +15,9 @@
 7. [REST API](#rest-api)
 8. [Data Collection](#data-collection)
 9. [Grafana Dashboards](#grafana-dashboards)
-10. [Useful Commands](#useful-commands)
-11. [Troubleshooting](#troubleshooting)
+8. [Stream Governance Integration](#stream-governance-integration-tag-based-cost-attribution)
+9. [Useful Commands](#useful-commands)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -449,6 +450,120 @@ All dashboards use **direct PostgreSQL SQL queries** for 30+ day historical cove
 - Which Service Account is generating the most cost?
 - Are there individual users generating unexpected costs?
 - Which automation (sa-*) is trending up in cost?
+
+---
+
+---
+
+## Stream Governance Integration (Tag-Based Cost Attribution)
+
+The portal integrates with the **Confluent Stream Governance Catalog API** to fetch native entity tags for granular cost attribution. This enables cost tracking at the topic and schema level using the same tags you manage in the Confluent Cloud Console.
+
+### Supported Tag Keys
+
+The system automatically recognizes these tags for cost attribution:
+
+| Tag Key | Purpose | Example Value |
+|---------|---------|---------------|
+| `owner` | Resource owner | `sa-123456` or `bob@company.com` |
+| `team` | Team assignment | `data-platform` |
+| `cost_center` | Cost center code | `cc-engineering` |
+| `business_unit` | Business unit | `analytics` |
+| `project` | Project name | `real-time-pipeline` |
+| `department` | Department | `engineering` |
+
+### How It Works
+
+1. **Tag Collection Job** queries the Catalog API (`/catalog/v1/entity/type/.../tags`) for all known clusters
+2. Tags are stored in `dimensions_clusters.meta_data["tags"]`
+3. During billing enrichment, `EntityCorrelator` reads these tags to populate `principal_id`, `team`, `business_unit`, and `cost_center`
+4. The enriched data appears in the Grafana dashboards (especially "Cost by Principal")
+
+### Step-by-Step Configuration
+
+#### 1. Verify Stream Governance Package
+
+Your environment needs **ESSENTIALS** or **ADVANCED** Stream Governance.
+
+Check in: **Confluent Cloud Console > Environments > your-env > Stream Governance**
+
+#### 2. Create Schema Registry API Key
+
+Navigate to:
+```
+Confluent Cloud Console
+> Environments > your-env
+> Schema Registry > API Credentials
+> Create Key
+```
+
+Save the **API Key** and **API Secret**.
+
+#### 3. Configure Environment Variables
+
+Add the following to your `.env` file (or `docker/.env`):
+
+```env
+# Stream Governance / Schema Registry (for Catalog API tags)
+SCHEMA_REGISTRY_URL=https://psrc-xxxxx.us-east-2.aws.confluent.cloud
+SCHEMA_REGISTRY_API_KEY=YOUR_SR_API_KEY
+SCHEMA_REGISTRY_API_SECRET=YOUR_SR_API_SECRET
+```
+
+> The Schema Registry URL can be found in: Confluent Cloud Console > Environments > your-env > Schema Registry > API endpoint.
+
+#### 4. Rebuild and Restart the Application
+
+```bash
+cd docker
+docker compose build app
+docker compose up -d app
+```
+
+#### 5. Tag Your Resources in Confluent Cloud
+
+In the Confluent Cloud Console, navigate to a topic or cluster and add tags via the **Metadata** tab. Recommended tags:
+- `owner`: The Service Account ID (`sa-xxxxx`) or user email responsible for the resource
+- `team`: The team that owns this resource
+- `cost_center`: The cost center for chargeback
+
+#### 6. Trigger Tag Collection
+
+```bash
+# Collect tags from Catalog API
+curl -X POST http://localhost:8000/api/v1/collect/catalog-tags
+
+# Or run the full pipeline (core objects → tags → billing)
+curl -X POST http://localhost:8000/api/v1/collect/full
+```
+
+#### 7. Verify Tags in Database
+
+```bash
+docker exec -it billing-postgres psql -U billing_user -d billing_db -c \
+  "SELECT id, name, meta_data->'tags' as tags FROM dimensions_clusters;"
+```
+
+### Collection API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/collect/catalog-tags` | Fetch entity tags from Stream Governance |
+| `POST` | `/api/v1/collect/billing` | Collect billing data from Confluent API |
+| `POST` | `/api/v1/collect/core-objects` | Fetch organizations, environments, clusters, service accounts |
+| `POST` | `/api/v1/collect/full` | Run complete pipeline (objects → tags → billing) |
+
+### Graceful Degradation
+
+If Stream Governance credentials are not configured, the system returns:
+```json
+{"status": "skipped", "reason": "Catalog API not configured..."}
+```
+
+The portal continues to work normally using alternative inference methods:
+- **Environment Name patterns**: `env-analytics-owner-bob`
+- **Cluster Name patterns**: `kafka-prod-owner-teamA`
+- **Service Account Description**: `Owner: bob@company.com`
 
 ---
 
