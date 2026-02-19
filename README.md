@@ -176,6 +176,7 @@ The platform includes 6 pre-configured dashboards using PostgreSQL SQL queries:
 | Confluent Cloud Chargeback | `ccloud_chargeback.json` | FinOps, cost managers |
 | Cost by Business Unit | `cost-by-business-unit.json` | Business managers |
 | Cost by Cluster | `cost-by-cluster.json` | Platform engineers, SREs |
+| Cost by Principal | `cost-by-principal.json` | Security, automation owners |
 | Historical Costs (SQL) | `historical_costs.json` | Financial analysts, audit |
 | Confidence Metrics | `confidence-metrics.json` | Data quality, FinOps |
 

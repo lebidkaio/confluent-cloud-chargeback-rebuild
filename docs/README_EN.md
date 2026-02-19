@@ -429,6 +429,29 @@ All dashboards use **direct PostgreSQL SQL queries** for 30+ day historical cove
 
 ---
 
+---
+
+### 7. Cost by Principal
+
+**File:** `cost-by-principal.json`
+**Audience:** Security teams, automation owners, platform engineers
+
+**Available views:**
+
+| Panel | Type | What it shows |
+|---|---|---|
+| Cost by Principal Type | Pie Chart | Breakdown of costs by type (Service Account vs User) |
+| Top 10 Principals | Bar Gauge | Highest spending principals (Service Accounts or Users) |
+| Daily Cost Trend | Time Series | Daily cost evolution per principal |
+| Principal Cost Detail | Table | Detailed list with Name, Email, Total Cost, and active clusters |
+
+**Key insights:**
+- Which Service Account is generating the most cost?
+- Are there individual users generating unexpected costs?
+- Which automation (sa-*) is trending up in cost?
+
+---
+
 ## Useful Commands
 
 ### Makefile

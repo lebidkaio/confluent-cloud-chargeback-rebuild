@@ -432,6 +432,29 @@ Todos os dashboards utilizam **queries SQL diretas no PostgreSQL** para cobertur
 
 ---
 
+---
+
+### 7. Cost by Principal (Custo por Principal)
+
+**Arquivo:** `cost-by-principal.json`
+**Público:** Equipes de segurança, donos de automação, engenheiros de plataforma
+
+**Visões disponíveis:**
+
+| Painel | Tipo | O que mostra |
+|---|---|---|
+| Cost by Principal Type | Pie Chart | Quebra de custos por tipo (Service Account vs Usuário) |
+| Top 10 Principals | Bar Gauge | Principais com maiores gastos (Service Accounts ou Usuários) |
+| Daily Cost Trend | Time Series | Evolução diária de custo por principal |
+| Principal Cost Detail | Table | Lista detalhada com Nome, Email, Custo Total e clusters ativos |
+
+**Insights que proporciona:**
+- Qual Service Account está gerando mais custo?
+- Existem usuários individuais gerando custos inesperados?
+- Qual automação (sa-*) está com tendência de alta no custo?
+
+---
+
 ## Comandos Úteis
 
 ### Makefile
