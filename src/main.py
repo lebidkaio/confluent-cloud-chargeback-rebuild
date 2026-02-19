@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api import costs, dimensions, health
+from src.api import collect, costs, dimensions, health
 from src.common.config import get_settings
 from src.common.logging import get_logger, setup_logging
 from src.exporter import metrics
@@ -76,6 +76,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(costs.router)
 app.include_router(dimensions.router)
+app.include_router(collect.router)
 app.include_router(metrics.router)
 
 

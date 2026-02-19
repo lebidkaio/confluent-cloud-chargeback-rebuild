@@ -307,3 +307,85 @@ def run_billing_collection(db: Session, target_date: date = None) -> Dict[str, A
             "run_id": run.id,
             "error": str(e),
         }
+
+
+def run_catalog_tags_collection(db: Session) -> Dict[str, Any]:
+    """
+    Fetch entity tags from Stream Governance Catalog API
+    and store them in dimension tables for cost attribution.
+
+    Tags are merged into dimensions_clusters.meta_data["tags"]
+    and will be used by EntityCorrelator during billing enrichment.
+
+    Args:
+        db: Database session
+
+    Returns:
+        Job result with statistics
+    """
+    from src.collector.catalog_api import CatalogAPIClient
+    from src.storage.models import DimensionCluster
+
+    logger.info("Starting catalog tags collection")
+
+    catalog = CatalogAPIClient()
+
+    if not catalog.is_enabled:
+        return {
+            "status": "skipped",
+            "reason": "Catalog API not configured. Set SCHEMA_REGISTRY_URL, "
+                      "SCHEMA_REGISTRY_API_KEY, SCHEMA_REGISTRY_API_SECRET.",
+        }
+
+    try:
+        # 1. Get all known cluster IDs from DB
+        clusters = db.query(DimensionCluster).all()
+
+        if not clusters:
+            logger.info("No clusters in database, skipping tag collection")
+            return {"status": "skipped", "reason": "No clusters found in database"}
+
+        cluster_ids = [c.id for c in clusters]
+        logger.info(f"Fetching tags for {len(cluster_ids)} clusters")
+
+        # 2. Fetch tags from Catalog API
+        all_tags = catalog.get_all_cluster_tags(cluster_ids)
+
+        # 3. Merge tags into dimension metadata
+        updated_count = 0
+        for cluster in clusters:
+            tags = all_tags.get(cluster.id)
+            if tags:
+                # Merge tags into existing meta_data
+                meta = cluster.meta_data or {}
+                existing_tags = meta.get("tags", {})
+                existing_tags.update(tags)
+                meta["tags"] = existing_tags
+                cluster.meta_data = meta
+                updated_count += 1
+                logger.info(
+                    f"Updated tags for cluster {cluster.id}: {tags}",
+                )
+
+        db.commit()
+
+        result = {
+            "status": "success",
+            "clusters_scanned": len(cluster_ids),
+            "clusters_with_tags": len(all_tags),
+            "clusters_updated": updated_count,
+        }
+
+        logger.info(f"Catalog tags collection completed: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Catalog tags collection failed: {e}")
+        db.rollback()
+        return {
+            "status": "failed",
+            "error": str(e),
+        }
+    finally:
+        catalog.close()
+

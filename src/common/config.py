@@ -38,6 +38,14 @@ class Settings(BaseSettings):
         description="Confluent Cloud API base URL",
     )
 
+    # Stream Governance / Schema Registry (for Catalog API tags)
+    schema_registry_url: str = Field(
+        default="",
+        description="Schema Registry URL (e.g. https://psrc-xxxxx.us-east-2.aws.confluent.cloud)",
+    )
+    schema_registry_api_key: str = Field(default="", description="Schema Registry API key")
+    schema_registry_api_secret: str = Field(default="", description="Schema Registry API secret")
+
     # Metrics API (optional)
     metrics_api_url: str = Field(default="")
     metrics_api_key: str = Field(default="")

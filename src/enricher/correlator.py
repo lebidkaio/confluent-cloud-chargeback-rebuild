@@ -137,6 +137,7 @@ class EntityCorrelator:
                 "principal_type": principal.principal_type,
                 "email": principal.email,
                 "org_id": principal.org_id,
+                "description": principal.meta_data.get("description") if principal.meta_data else None,
             }
         
         logger.warning(f"Principal not found: {principal_id}")
@@ -273,7 +274,7 @@ class EntityCorrelator:
             
         # Enrich with principal (from tags)
         if not enriched.get("principal_id"):
-            enriched["principal_id"] = self._infer_principal(tags)
+            enriched["principal_id"] = self._infer_principal(tags, graph)
         
         # Enrich with team/environment tags
         enriched["team"] = tags.get("team", "unknown")
@@ -324,44 +325,89 @@ class EntityCorrelator:
         - production -> cc-production
         - Default: cc-unknown
         """
+        # This method seems to assume 'bu' is available in scope or is a copy-paste error.
+        # Based on context, it should probably call _infer_business_unit or be fixed.
+        # But looking at previous code, _infer_cost_center(cluster_info)
+        bu = self._infer_business_unit(cluster_info)
         return f"cc-{bu}"
 
-    def _infer_principal(self, tags: Dict[str, Any]) -> Optional[str]:
+    def _infer_principal(self, tags: Dict[str, Any], graph: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """
-        Infer principal_id from tags
+        Infer principal_id from tags, names, or descriptions
         
-        Tags checked (in order):
-        - owner
-        - principal
-        - created_by
-        - user
-        - service_account
+        Priority:
+        1. Tags (owner, principal, etc.)
+        2. Service Account Description (e.g. "Owner: bob@company.com")
+        3. Resource Name Patterns (e.g. "cluster-owner-bob")
         
         Supported value formats:
         - sa-xxxxx (Service Account ID)
         - u-xxxxx (User ID)
         - email@address.com (Lookup by email)
         """
+        # 1. Check Tags first
         target_tags = ["owner", "principal", "created_by", "user", "service_account"]
         
         for tag_key in target_tags:
             value = tags.get(tag_key)
-            if not value:
-                continue
-                
-            value = str(value).strip()
-            
-            # Direct ID match
-            if value.startswith("sa-") or value.startswith("u-"):
-                # Retrieve from DB to ensure validity/existence
-                principal = self.db.query(DimensionPrincipal).filter_by(id=value).first()
-                if principal:
-                    return principal.id
-            
-            # Email lookup
-            if "@" in value:
-                principal = self.db.query(DimensionPrincipal).filter_by(email=value).first()
-                if principal:
-                    return principal.id
+            if value:
+                match = self._resolve_principal_value(str(value).strip())
+                if match:
+                    return match
+
+        if not graph:
+            return None
+
+        # 2. Check Service Account Description (if principal is known but we want to confirm owner)
+        # Actually, if we have graph['principal'], we already have the ID!
+        # But maybe the cost is for a cluster, and we want to find the owner.
         
+        # 3. Check Resource Names (Environment, Cluster)
+        # Look for pattern: owner-<id> or owner-<email-prefix>
+        import re
+        
+        # Helper to check string for owner pattern
+        def check_string_for_owner(text: str) -> Optional[str]:
+            if not text:
+                return None
+            
+            # Pattern 1: owner: <value> or owner=<value>
+            match = re.search(r'(?:owner|principal|user)[:=]\s*([a-zA-Z0-9@._-]+)', text, re.IGNORECASE)
+            if match:
+                return self._resolve_principal_value(match.group(1))
+            
+            # Pattern 2: ...-owner-<value>-... (in resource names)
+            match = re.search(r'-owner-([a-zA-Z0-9@._]+)', text, re.IGNORECASE)
+            if match:
+                return self._resolve_principal_value(match.group(1))
+                
+            return None
+
+        # Check Environment Name
+        if graph.get("env"):
+            p = check_string_for_owner(graph["env"].get("name")) or check_string_for_owner(graph["env"].get("display_name"))
+            if p: return p
+            
+        # Check Cluster Name
+        if graph.get("cluster"):
+            p = check_string_for_owner(graph["cluster"].get("name"))
+            if p: return p
+
+        return None
+
+    def _resolve_principal_value(self, value: str) -> Optional[str]:
+        """Resolve a string value (id or email) to a principal_id"""
+        # Direct ID match
+        if value.startswith("sa-") or value.startswith("u-"):
+            principal = self.db.query(DimensionPrincipal).filter_by(id=value).first()
+            if principal:
+                return principal.id
+        
+        # Email lookup
+        if "@" in value:
+            principal = self.db.query(DimensionPrincipal).filter_by(email=value).first()
+            if principal:
+                return principal.id
+                
+        # Try to find user by name? (Risky)
         return None
